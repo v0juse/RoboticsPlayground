@@ -173,7 +173,16 @@ def solve_inverse_kinematics(
 
 
 solve_inverse_kinematics(spherical_wrist.T_all, R_homogeneus)
-# theta, d, a, alpha = sp.symbols("theta d a alpha")
+# %% Spherical wrist
+
+ex_quadro_dh_params: list[DenavitHartenbergParams] = [
+    {"theta": sp.symbols("theta1"), "d": 0, "a": 0, "alpha": sp.pi / 2},
+    {"theta": 0, "d": sp.symbols("d2"), "a": 0, "alpha": - sp.pi / 2},
+    {"theta": sp.symbols("theta3"), "d": 0, "a": sp.symbols("a3"), "alpha": 0},
+]
+ex_quadro = FromDenavidHatenberg(ex_quadro_dh_params)
+ex_quadro.T_all
+
 # homogenous_matrix(Rz(theta), sp.Matrix([0, 0, d])) * homogenous_matrix(
 # Rx(alpha), sp.Matrix([a, 0, 0])
 # )
