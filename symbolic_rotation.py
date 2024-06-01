@@ -278,26 +278,27 @@ pw_end = p_end - d_6 * a_end
 pw_end
 # %% calculating joint angles for the wrist
 # wrist is on O_4, using matrix T_4_0
-T_b_wrist = Robot.A[0] * Robot.A[1] * Robot.A[2] * Robot.A[3]
-
+T_b_wrist = Robot.base2zero * Robot.A[0] * Robot.A[1] * Robot.A[2] * Robot.A[3]
+T_b_wrist 
+# %% Solving the equations
 import numpy as np
 
 # Define the range of values for pw_end[0] and pw_end[1]
 pw_end_0_values = np.linspace(1.2, 1.4, 8)
 pw_end_1_values = np.linspace(-0.1,-0.5, 8)
 
-# Initialize a list to store the solutions
-solutions = []
+# Initialize a list to store the solution
+solution = []
 
 # Iterate over all pairs of values
 for pw_end_0 in pw_end_0_values:
     for pw_end_1 in pw_end_1_values:
         # Solve the equations
         try:
-            solution = sp.nsolve(
+            possible_solution = sp.nsolve(
                 (
-                    T_b_wrist[0, 3] - pw_end_0,
-                    T_b_wrist[1, 3] - pw_end_1,
+                    T_b_wrist[0, 3] - pw_end[0],
+                    T_b_wrist[1, 3] - pw_end[1],
                     T_b_wrist[2, 3] - pw_end[2],  # fixed value
                 ),
                 (sp.symbols("theta1"), sp.symbols("theta2"), sp.symbols("theta3")),
@@ -308,17 +309,19 @@ for pw_end_0 in pw_end_0_values:
             )
         except ValueError:
             continue
-        # Store the solution
-        solutions.append(solution)
+        # Store the solution if the solver converges
+        solution = possible_solution
+        break
 
-print("Solutions found:", len(solutions))
+print("Solutions found:", len(solution))
+solution
 # Now 'solutions' contains the solutions for all pairs of values
 # %% Testing position of the wrist
 T_b_wrist.evalf(
     subs={
-        sp.symbols("theta1"): solutions[0][0][sp.symbols("theta1")],
-        sp.symbols("theta2"): solutions[0][0][sp.symbols("theta2")],
-        sp.symbols("theta3"): solutions[0][0][sp.symbols("theta3")],
+        sp.symbols("theta1"): solution[0][sp.symbols("theta1")],
+        sp.symbols("theta2"): solution[0][sp.symbols("theta2")],
+        sp.symbols("theta3"): solution[0][sp.symbols("theta3")],
     }
 )
 # %%
