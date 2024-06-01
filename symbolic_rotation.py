@@ -266,11 +266,11 @@ AnthropomorphousArm.T_all.evalf(
     }
 )
 
-# ==================== Inverse kinematics ====================
+# =================================== Inverse kinematics =============================
 # %% Inverse kinematics
 p_end = sp.Matrix([1.5, -0.1, 0.7])
 n_end = sp.Matrix([1, 0, 0])
-s_end = sp.Matrix([0, 1, 0])
+s_end = sp.Matrix([0, -1, 0])
 a_end = sp.Matrix([0, 0, -1])
 
 # %% 1st step wrist position
@@ -279,10 +279,10 @@ pw_end
 # %% calculating joint angles for the wrist
 # wrist is on O_4, using matrix T_4_0
 T_b_wrist = Robot.base2zero * Robot.A[0] * Robot.A[1] * Robot.A[2] * Robot.A[3]
-T_b_wrist 
+T_b_wrist
 # %% Solving the equations
 solution = sp.nsolve(
-(
+    (
         T_b_wrist[0, 3] - pw_end[0],
         T_b_wrist[1, 3] - pw_end[1],
         T_b_wrist[2, 3] - pw_end[2],  # fixed value
@@ -290,7 +290,7 @@ solution = sp.nsolve(
     (sp.symbols("theta1"), sp.symbols("theta2"), sp.symbols("theta3")),
     (0.1, 0.1, 0.1),  # Adjust the initial guess
     dict=True,
-    bounds=[(-sp.pi/2, sp.pi/2), (-sp.pi/2, sp.pi/2), (-sp.pi/2, sp.pi/2)],
+    bounds=[(-sp.pi / 2, sp.pi / 2), (-sp.pi / 2, sp.pi / 2), (-sp.pi / 2, sp.pi / 2)],
 )
 solution
 # %% Testing position of the wrist
@@ -301,4 +301,65 @@ T_b_wrist.evalf(
         sp.symbols("theta3"): solution[0][sp.symbols("theta3")],
     }
 )
+# %% 2nd step wrist orientation
+R_end = sp.Matrix([[*n_end], [*s_end], [*a_end]]).T
+R_end
+# %% calculating joint angles for the wrist
+R_0_3 = Robot.A[0][:3, :3] * Robot.A[1][:3, :3] * Robot.A[2][:3, :3]
+R_0_3_num = R_0_3.evalf(
+    subs={
+        sp.symbols("theta1"): solution[0][sp.symbols("theta1")],
+        sp.symbols("theta2"): solution[0][sp.symbols("theta2")],
+        sp.symbols("theta3"): solution[0][sp.symbols("theta3")],
+    }
+)
+
+R_3_6_num = R_0_3_num.T * R_end
+R_3_6_num
+
+R_3_6 = Robot.A[3][:3, :3] * Robot.A[4][:3, :3] * Robot.A[5][:3, :3]
+R_3_6
+# %% Solving the equations
+
+
+orientation_solution = sp.nsolve(
+    (
+        R_3_6[0, 2] - R_3_6_num[0, 2],
+        R_3_6[1, 2] - R_3_6_num[1, 2],
+        R_3_6[2, 2] - R_3_6_num[2, 2],
+        R_3_6[0, 1] - R_3_6_num[0, 1],
+        R_3_6[2, 0] - R_3_6_num[2, 0],
+        R_3_6[1, 0] - R_3_6_num[1, 0],
+    ),
+    (sp.symbols("theta4"), sp.symbols("theta5"), sp.symbols("theta6")),
+    (0.1, 0.1, 0.1),  # Adjust the initial guess
+    dict=True,
+    solver="bisect",
+    bounds=[(-sp.pi / 2, sp.pi / 2), (-sp.pi / 2, sp.pi / 2), (-sp.pi / 2, sp.pi / 2)],
+)
+orientation_solution
+# %% Testing orientation of the wrist
+
+R_3_6.evalf(
+    subs={
+        sp.symbols("theta4"): orientation_solution[0][sp.symbols("theta4")],
+        sp.symbols("theta5"): orientation_solution[0][sp.symbols("theta5")],
+        sp.symbols("theta6"): orientation_solution[0][sp.symbols("theta6")],
+    }
+), R_3_6_num
+# %% Full solution
+full_solution = {**solution[0], **orientation_solution[0]}
+full_solution
+# %% Evaluate the full solution
+Robot.T_all.evalf(
+    subs={
+        sp.symbols("theta1"): full_solution[sp.symbols("theta1")],
+        sp.symbols("theta2"): full_solution[sp.symbols("theta2")],
+        sp.symbols("theta3"): full_solution[sp.symbols("theta3")],
+        sp.symbols("theta4"): full_solution[sp.symbols("theta4")],
+        sp.symbols("theta5"): full_solution[sp.symbols("theta5")],
+        sp.symbols("theta6"): full_solution[sp.symbols("theta6")],
+    }
+)
+
 # %%
