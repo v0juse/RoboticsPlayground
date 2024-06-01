@@ -106,6 +106,16 @@ class FromDenavidHatenberg:
         self.dh_parameters = dh_parameters
         self.A, self.T_all = self.get_homogenous_matrix()
 
+    # TODO: optimize this
+    def __add__(self, other):
+        return FromDenavidHatenberg(self.dh_parameters + other.dh_parameters)
+
+    def add_base_transformation(self, Matrix: sp.Matrix):
+        if hasattr(self, "base2zero"):
+            raise ValueError("Base transformation already added for this robot.")
+        self.base2zero = Matrix
+        self.T_all = Matrix * self.T_all
+
     def get_homogenous_matrix(self):
         A = []
         for i, dh_parameters in enumerate(self.dh_parameters):
@@ -172,13 +182,13 @@ def solve_inverse_kinematics(
     )
 
 
-solve_inverse_kinematics(spherical_wrist.T_all, R_homogeneus)
+# solve_inverse_kinematics(spherical_wrist.T_all, R_homogeneus)
 # %% Spherical wrist
 
 ex_quadro_dh_params: list[DenavitHartenbergParams] = [
-    {"theta": sp.symbols("theta1"), "d": 0, "a": 0, "alpha": sp.pi / 2},
-    {"theta": 0, "d": sp.symbols("d2"), "a": 0, "alpha": - sp.pi / 2},
-    {"theta": sp.symbols("theta3"), "d": 0, "a": sp.symbols("a3"), "alpha": 0},
+    {"theta": sp.symbols("theta1"), "d": sp.symbols("d1"), "a": 0, "alpha": sp.pi / 2},
+    {"theta": sp.symbols("theta2"), "d": 0, "a": 0, "alpha": sp.pi / 2},
+    {"theta": 0, "d": sp.symbols("d3"), "a": 0, "alpha": 0},
 ]
 ex_quadro = FromDenavidHatenberg(ex_quadro_dh_params)
 ex_quadro.T_all
@@ -186,3 +196,129 @@ ex_quadro.T_all
 # homogenous_matrix(Rz(theta), sp.Matrix([0, 0, d])) * homogenous_matrix(
 # Rx(alpha), sp.Matrix([a, 0, 0])
 # )
+# ========= Anthropomorphous manipulator =========
+# %% Constructive parameters
+a_0 = 0.5
+b_0 = 0.5
+a_2 = 0.85
+d_4 = 0.57
+d_1 = 0.82
+d_6 = 0.17
+
+alpha_1 = -sp.pi / 2
+alpha_2 = 0
+alpha_3 = -sp.pi / 2
+alpha_4 = sp.pi / 2
+alpha_5 = -sp.pi / 2
+alpha_6 = 0
+# %% Anthropomorphous manipulator
+
+anthropomorphous_dh_params: list[DenavitHartenbergParams] = [
+    {"theta": sp.symbols("theta1"), "d": d_1, "a": 0, "alpha": alpha_1},
+    {"theta": sp.symbols("theta2"), "d": 0, "a": a_2, "alpha": alpha_2},
+    {"theta": sp.symbols("theta3"), "d": 0, "a": 0, "alpha": alpha_3},
+]
+AnthropomorphousArm = FromDenavidHatenberg(anthropomorphous_dh_params)
+# %% Spherical wrist
+spherical_wrist_dh_params: list[DenavitHartenbergParams] = [
+    {"theta": sp.symbols("theta4"), "d": d_4, "a": 0, "alpha": alpha_4},
+    {"theta": sp.symbols("theta5"), "d": 0, "a": 0, "alpha": alpha_5},
+    {"theta": sp.symbols("theta6"), "d": d_6, "a": 0, "alpha": alpha_6},
+]
+SphericalWrist = FromDenavidHatenberg(spherical_wrist_dh_params)
+
+# %% Complete anthropomorphous manipulator with spherical wrist
+Robot = AnthropomorphousArm + SphericalWrist
+Robot.T_all
+
+# %% Add base translation
+base_translation = homogenous_matrix(trans=[a_0, b_0, 0])
+Robot.add_base_transformation(base_translation)
+# %% Testing the robot function with some values (all zero)
+Robot.T_all.evalf(
+    subs={
+        sp.symbols("theta1"): 0,
+        sp.symbols("theta2"): 0,
+        sp.symbols("theta3"): 0,
+        sp.symbols("theta4"): 0,
+        sp.symbols("theta5"): 0,
+        sp.symbols("theta6"): 0,
+    }
+)
+# %% Testing the robot function with some values (not all zero)
+Robot.T_all.evalf(
+    subs={
+        sp.symbols("theta1"): sp.pi / 4,
+        sp.symbols("theta2"): -sp.pi / 4,
+        sp.symbols("theta3"): 0,
+        sp.symbols("theta4"): 0,
+        sp.symbols("theta5"): sp.pi / 3,
+        sp.symbols("theta6"): 0,
+    }
+)
+# %% Testing anthropomorphous manipulator only
+AnthropomorphousArm.add_base_transformation(base_translation)
+AnthropomorphousArm.T_all.evalf(
+    subs={
+        sp.symbols("theta1"): 0,
+        sp.symbols("theta2"): -sp.pi / 4,
+        sp.symbols("theta3"): 0,
+    }
+)
+
+# ==================== Inverse kinematics ====================
+# %% Inverse kinematics
+p_end = sp.Matrix([1.5, -0.1, 0.7])
+n_end = sp.Matrix([1, 0, 0])
+s_end = sp.Matrix([0, 1, 0])
+a_end = sp.Matrix([0, 0, -1])
+
+# %% 1st step wrist position
+pw_end = p_end - d_6 * a_end
+pw_end
+# %% calculating joint angles for the wrist
+# wrist is on O_4, using matrix T_4_0
+T_b_wrist = Robot.A[0] * Robot.A[1] * Robot.A[2] * Robot.A[3]
+
+import numpy as np
+
+# Define the range of values for pw_end[0] and pw_end[1]
+pw_end_0_values = np.linspace(1.2, 1.4, 8)
+pw_end_1_values = np.linspace(-0.1,-0.5, 8)
+
+# Initialize a list to store the solutions
+solutions = []
+
+# Iterate over all pairs of values
+for pw_end_0 in pw_end_0_values:
+    for pw_end_1 in pw_end_1_values:
+        # Solve the equations
+        try:
+            solution = sp.nsolve(
+                (
+                    T_b_wrist[0, 3] - pw_end_0,
+                    T_b_wrist[1, 3] - pw_end_1,
+                    T_b_wrist[2, 3] - pw_end[2],  # fixed value
+                ),
+                (sp.symbols("theta1"), sp.symbols("theta2"), sp.symbols("theta3")),
+                (0.1, 0.1, 0.1),  # Adjust the initial guess
+                dict=True,
+                bounds=[(-sp.pi/2, sp.pi/2), (-sp.pi/2, sp.pi/2), (-sp.pi/2, sp.pi/2)],
+                # solver="bisect",
+            )
+        except ValueError:
+            continue
+        # Store the solution
+        solutions.append(solution)
+
+print("Solutions found:", len(solutions))
+# Now 'solutions' contains the solutions for all pairs of values
+# %% Testing position of the wrist
+T_b_wrist.evalf(
+    subs={
+        sp.symbols("theta1"): solutions[0][0][sp.symbols("theta1")],
+        sp.symbols("theta2"): solutions[0][0][sp.symbols("theta2")],
+        sp.symbols("theta3"): solutions[0][0][sp.symbols("theta3")],
+    }
+)
+# %%
