@@ -269,8 +269,8 @@ AnthropomorphousArm.T_all.evalf(
 # =================================== Inverse kinematics =============================
 # %% Inverse kinematics
 p_end = sp.Matrix([1.5, -0.1, 0.7])
-n_end = sp.Matrix([1, 0, 0])
-s_end = sp.Matrix([0, -1, 0])
+n_end = sp.Matrix([sp.sqrt(2)/2, sp.sqrt(2)/2, 0])
+s_end = sp.Matrix([sp.sqrt(2)/2, -sp.sqrt(2)/2, 0])
 a_end = sp.Matrix([0, 0, -1])
 
 # %% 1st step wrist position
@@ -479,9 +479,9 @@ for key in start_position_joints.keys():
     )
 
 # %% Add intermediary position
-p_end_effector_intermediary = sp.Matrix([1.5, 0.2, 0.7])
-n_end_effector_intermediary = sp.Matrix([1, 0, 0])
-s_end_effector_intermediary = sp.Matrix([0, -1, 0])
+p_end_effector_intermediary = sp.Matrix([1.5, 0.2, 0.9])
+n_end_effector_intermediary = sp.Matrix([sp.sqrt(2)/2, sp.sqrt(2)/2, 0])
+s_end_effector_intermediary = sp.Matrix([sp.sqrt(2)/2, -sp.sqrt(2)/2, 0])
 a_end_effector_intermediary = sp.Matrix([0, 0, -1])
 
 intermediary_position_joints = reverse_kinematics(
@@ -509,13 +509,16 @@ Robot.T_all.evalf(
         sp.symbols("theta6"): intermediary_position_joints[sp.symbols("theta6")],
     }
 )
-
 # %% Quadratic joint functions of t (time)
 # find a quadratic function for each joint
 # t = 0 -> start_position_joints
 # t = 0.5 -> intermediary_position_joints
 # t = 1 -> end_position_joints
 for key in start_position_joints.keys():
+    a = start_position_joints[key]
+    b = intermediary_position_joints[key]
+    c = end_position_joints[key]
     print(
-        f"{key} = {start_position_joints[key]} + ({-2*start_position_joints[key]+4*intermediary_position_joints[key]-2*end_position_joints[key]})t^2"
+        f"{key} = {2*a-2*b+2*c}t^2 + {2*b-3*a-c}t + {a}"
     )
+# %%
