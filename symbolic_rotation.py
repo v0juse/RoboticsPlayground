@@ -281,24 +281,24 @@ pw_end
 T_b_wrist = Robot.base2zero * Robot.A[0] * Robot.A[1] * Robot.A[2] * Robot.A[3]
 T_b_wrist
 # %% Solving the equations
-solution = sp.nsolve(
+wrist_position_solution = sp.nsolve(
     (
         T_b_wrist[0, 3] - pw_end[0],
         T_b_wrist[1, 3] - pw_end[1],
-        T_b_wrist[2, 3] - pw_end[2],  # fixed value
+        T_b_wrist[2, 3] - pw_end[2],
     ),
     (sp.symbols("theta1"), sp.symbols("theta2"), sp.symbols("theta3")),
     (0.1, 0.1, 0.1),  # Adjust the initial guess
     dict=True,
     bounds=[(-sp.pi / 2, sp.pi / 2), (-sp.pi / 2, sp.pi / 2), (-sp.pi / 2, sp.pi / 2)],
 )
-solution
+wrist_position_solution
 # %% Testing position of the wrist
 T_b_wrist.evalf(
     subs={
-        sp.symbols("theta1"): solution[0][sp.symbols("theta1")],
-        sp.symbols("theta2"): solution[0][sp.symbols("theta2")],
-        sp.symbols("theta3"): solution[0][sp.symbols("theta3")],
+        sp.symbols("theta1"): wrist_position_solution[0][sp.symbols("theta1")],
+        sp.symbols("theta2"): wrist_position_solution[0][sp.symbols("theta2")],
+        sp.symbols("theta3"): wrist_position_solution[0][sp.symbols("theta3")],
     }
 )
 # %% 2nd step wrist orientation
@@ -308,9 +308,9 @@ R_end
 R_0_3 = Robot.A[0][:3, :3] * Robot.A[1][:3, :3] * Robot.A[2][:3, :3]
 R_0_3_num = R_0_3.evalf(
     subs={
-        sp.symbols("theta1"): solution[0][sp.symbols("theta1")],
-        sp.symbols("theta2"): solution[0][sp.symbols("theta2")],
-        sp.symbols("theta3"): solution[0][sp.symbols("theta3")],
+        sp.symbols("theta1"): wrist_position_solution[0][sp.symbols("theta1")],
+        sp.symbols("theta2"): wrist_position_solution[0][sp.symbols("theta2")],
+        sp.symbols("theta3"): wrist_position_solution[0][sp.symbols("theta3")],
     }
 )
 
@@ -348,18 +348,174 @@ R_3_6.evalf(
     }
 ), R_3_6_num
 # %% Full solution
-full_solution = {**solution[0], **orientation_solution[0]}
-full_solution
+end_position_joints = {**wrist_position_solution[0], **orientation_solution[0]}
+end_position_joints
 # %% Evaluate the full solution
 Robot.T_all.evalf(
     subs={
-        sp.symbols("theta1"): full_solution[sp.symbols("theta1")],
-        sp.symbols("theta2"): full_solution[sp.symbols("theta2")],
-        sp.symbols("theta3"): full_solution[sp.symbols("theta3")],
-        sp.symbols("theta4"): full_solution[sp.symbols("theta4")],
-        sp.symbols("theta5"): full_solution[sp.symbols("theta5")],
-        sp.symbols("theta6"): full_solution[sp.symbols("theta6")],
+        sp.symbols("theta1"): end_position_joints[sp.symbols("theta1")],
+        sp.symbols("theta2"): end_position_joints[sp.symbols("theta2")],
+        sp.symbols("theta3"): end_position_joints[sp.symbols("theta3")],
+        sp.symbols("theta4"): end_position_joints[sp.symbols("theta4")],
+        sp.symbols("theta5"): end_position_joints[sp.symbols("theta5")],
+        sp.symbols("theta6"): end_position_joints[sp.symbols("theta6")],
     }
 )
 
-# %%
+
+# %% Extracting the solution to a function
+def reverse_kinematics(
+    d_6: float,
+    Robot: FromDenavidHatenberg,
+    p_end: sp.Matrix,
+    n_end: sp.Matrix,
+    s_end: sp.Matrix,
+    a_end: sp.Matrix,
+) -> dict:
+    pw_end = p_end - d_6 * a_end
+    # wrist is on O_4, using matrix T_4_0
+    T_b_wrist = Robot.base2zero * Robot.A[0] * Robot.A[1] * Robot.A[2] * Robot.A[3]
+    wrist_position_solution = sp.nsolve(
+        (
+            T_b_wrist[0, 3] - pw_end[0],
+            T_b_wrist[1, 3] - pw_end[1],
+            T_b_wrist[2, 3] - pw_end[2],
+        ),
+        (sp.symbols("theta1"), sp.symbols("theta2"), sp.symbols("theta3")),
+        (0.1, 0.1, 0.1),  # Adjust the initial guess
+        dict=True,
+        bounds=[
+            (-sp.pi / 2, sp.pi / 2),
+            (-sp.pi / 2, sp.pi / 2),
+            (-sp.pi / 2, sp.pi / 2),
+        ],
+    )
+    T_b_wrist.evalf(
+        subs={
+            sp.symbols("theta1"): wrist_position_solution[0][sp.symbols("theta1")],
+            sp.symbols("theta2"): wrist_position_solution[0][sp.symbols("theta2")],
+            sp.symbols("theta3"): wrist_position_solution[0][sp.symbols("theta3")],
+        }
+    )
+    # 2nd step wrist orientation
+    R_end = sp.Matrix([[*n_end], [*s_end], [*a_end]]).T
+    # calculating joint angles for the wrist
+    R_0_3 = Robot.A[0][:3, :3] * Robot.A[1][:3, :3] * Robot.A[2][:3, :3]
+    R_0_3_num = R_0_3.evalf(
+        subs={
+            sp.symbols("theta1"): wrist_position_solution[0][sp.symbols("theta1")],
+            sp.symbols("theta2"): wrist_position_solution[0][sp.symbols("theta2")],
+            sp.symbols("theta3"): wrist_position_solution[0][sp.symbols("theta3")],
+        }
+    )
+
+    R_3_6_num = R_0_3_num.T * R_end
+
+    R_3_6 = Robot.A[3][:3, :3] * Robot.A[4][:3, :3] * Robot.A[5][:3, :3]
+
+    orientation_solution = sp.nsolve(
+        (
+            R_3_6[0, 2] - R_3_6_num[0, 2],
+            R_3_6[1, 2] - R_3_6_num[1, 2],
+            R_3_6[2, 2] - R_3_6_num[2, 2],
+            R_3_6[0, 1] - R_3_6_num[0, 1],
+            R_3_6[2, 0] - R_3_6_num[2, 0],
+            R_3_6[1, 0] - R_3_6_num[1, 0],
+        ),
+        (sp.symbols("theta4"), sp.symbols("theta5"), sp.symbols("theta6")),
+        (0.1, 0.1, 0.1),  # Adjust the initial guess
+        dict=True,
+        solver="bisect",
+        bounds=[
+            (-sp.pi / 2, sp.pi / 2),
+            (-sp.pi / 2, sp.pi / 2),
+            (-sp.pi / 2, sp.pi / 2),
+        ],
+    )
+
+    full_solution = {**wrist_position_solution[0], **orientation_solution[0]}
+    return full_solution
+
+
+# %% Test the function for the intermediary position
+h_agv = 0.3
+p_end_effector_start = sp.Matrix([1.5, 0.5, h_agv + 0.1])
+n_end_effector_start = sp.Matrix([1, 0, 0])
+s_end_effector_start = sp.Matrix([0, -1, 0])
+a_end_effector_start = sp.Matrix([0, 0, -1])
+
+start_position_joints = reverse_kinematics(
+    d_6,
+    Robot,
+    p_end_effector_start,
+    n_end_effector_start,
+    s_end_effector_start,
+    a_end_effector_start,
+)
+
+threshold = 1e-10
+
+start_position_joints = {
+    k: 0 if abs(v) < threshold else v for k, v in start_position_joints.items()
+}
+start_position_joints
+
+# %% Test the function for the end position
+Robot.T_all.evalf(
+    subs={
+        sp.symbols("theta1"): start_position_joints[sp.symbols("theta1")],
+        sp.symbols("theta2"): start_position_joints[sp.symbols("theta2")],
+        sp.symbols("theta3"): start_position_joints[sp.symbols("theta3")],
+        sp.symbols("theta4"): start_position_joints[sp.symbols("theta4")],
+        sp.symbols("theta5"): start_position_joints[sp.symbols("theta5")],
+        sp.symbols("theta6"): start_position_joints[sp.symbols("theta6")],
+    }
+)
+
+# %% Linear joint functions of t (time)
+for key in start_position_joints.keys():
+    print(
+        f"{key} = {start_position_joints[key]} + ({-start_position_joints[key]+end_position_joints[key]})t"
+    )
+
+# %% Add intermediary position
+p_end_effector_intermediary = sp.Matrix([1.5, 0.2, 0.7])
+n_end_effector_intermediary = sp.Matrix([1, 0, 0])
+s_end_effector_intermediary = sp.Matrix([0, -1, 0])
+a_end_effector_intermediary = sp.Matrix([0, 0, -1])
+
+intermediary_position_joints = reverse_kinematics(
+    d_6,
+    Robot,
+    p_end_effector_intermediary,
+    n_end_effector_intermediary,
+    s_end_effector_intermediary,
+    a_end_effector_intermediary,
+)
+
+# %% Test the function for the intermediary position
+intermediary_position_joints = {
+    k: 0 if abs(v) < threshold else v for k, v in intermediary_position_joints.items()
+}
+intermediary_position_joints
+
+Robot.T_all.evalf(
+    subs={
+        sp.symbols("theta1"): intermediary_position_joints[sp.symbols("theta1")],
+        sp.symbols("theta2"): intermediary_position_joints[sp.symbols("theta2")],
+        sp.symbols("theta3"): intermediary_position_joints[sp.symbols("theta3")],
+        sp.symbols("theta4"): intermediary_position_joints[sp.symbols("theta4")],
+        sp.symbols("theta5"): intermediary_position_joints[sp.symbols("theta5")],
+        sp.symbols("theta6"): intermediary_position_joints[sp.symbols("theta6")],
+    }
+)
+
+# %% Quadratic joint functions of t (time)
+# find a quadratic function for each joint
+# t = 0 -> start_position_joints
+# t = 0.5 -> intermediary_position_joints
+# t = 1 -> end_position_joints
+for key in start_position_joints.keys():
+    print(
+        f"{key} = {start_position_joints[key]} + ({-2*start_position_joints[key]+4*intermediary_position_joints[key]-2*end_position_joints[key]})t^2"
+    )
