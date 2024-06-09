@@ -1,6 +1,7 @@
 # %% Importing libraries
 import sympy as sp
 import pydantic as pyd
+import numpy as np
 
 
 # %% Defining rotation matrices
@@ -269,8 +270,8 @@ AnthropomorphousArm.T_all.evalf(
 # =================================== Inverse kinematics =============================
 # %% Inverse kinematics
 p_end = sp.Matrix([1.5, -0.1, 0.7])
-n_end = sp.Matrix([sp.sqrt(2)/2, sp.sqrt(2)/2, 0])
-s_end = sp.Matrix([sp.sqrt(2)/2, -sp.sqrt(2)/2, 0])
+n_end = sp.Matrix([sp.sqrt(2) / 2, sp.sqrt(2) / 2, 0])
+s_end = sp.Matrix([sp.sqrt(2) / 2, -sp.sqrt(2) / 2, 0])
 a_end = sp.Matrix([0, 0, -1])
 
 # %% 1st step wrist position
@@ -473,15 +474,51 @@ Robot.T_all.evalf(
 )
 
 # %% Linear joint functions of t (time)
+# input: (ti, qi) and (tf, qf)
+# find a linear function for each joint
+# TODO find equations
+# [ ] be printable
+# [ ] plot graphs in time
+joint_functions = {}
+t = sp.symbols("t")
 for key in start_position_joints.keys():
-    print(
-        f"{key} = {start_position_joints[key]} + ({-start_position_joints[key]+end_position_joints[key]})t"
+    fn = (
+        start_position_joints[key]
+        + (-start_position_joints[key] + end_position_joints[key]) * t
     )
+    joint_functions[key] = fn
+    joint_functions[key] = sp.simplify(joint_functions[key])
+    print(f"{key} = {joint_functions[key]}")
+
+
+# # %% Plot as subplots
+# # Create subplots
+# num_joints = len(joint_functions)
+# fig, axes = plt.subplots(num_joints, 1, figsize=(10, 6 * num_joints))
+
+# for i, (key, fn) in enumerate(joint_functions.items()):
+#     # Create a numpy function from the sympy expression
+#     fn_np = sp.lambdify(t, fn, "numpy")
+#     # Evaluate the function over the time range
+#     fn_values = fn_np(time_range)
+#     # Plot the function in the appropriate subplot
+#     axes[i].plot(time_range, fn_values, label=key)
+#     axes[i].set_xlabel("Time (t)")
+#     axes[i].set_ylabel("Position")
+#     axes[i].set_title(f"Joint Function: {key}")
+#     axes[i].legend()
+#     axes[i].grid(True)
+
+# # Adjust layout
+# plt.tight_layout()
+
+# # Show the plot
+# plt.show()
 
 # %% Add intermediary position
 p_end_effector_intermediary = sp.Matrix([1.5, 0.2, 0.9])
-n_end_effector_intermediary = sp.Matrix([sp.sqrt(2)/2, sp.sqrt(2)/2, 0])
-s_end_effector_intermediary = sp.Matrix([sp.sqrt(2)/2, -sp.sqrt(2)/2, 0])
+n_end_effector_intermediary = sp.Matrix([sp.sqrt(2) / 2, sp.sqrt(2) / 2, 0])
+s_end_effector_intermediary = sp.Matrix([sp.sqrt(2) / 2, -sp.sqrt(2) / 2, 0])
 a_end_effector_intermediary = sp.Matrix([0, 0, -1])
 
 intermediary_position_joints = reverse_kinematics(
@@ -509,16 +546,127 @@ Robot.T_all.evalf(
         sp.symbols("theta6"): intermediary_position_joints[sp.symbols("theta6")],
     }
 )
-# %% Quadratic joint functions of t (time)
+
+
+# %% Linear joint functions of t (time)
+# find a quadratic function for each joint
+# t = 0 -> start_position_joints
+# t = 0.5 -> intermediary_position_joints
+# t = 1 -> end_position_joints
+def linear_function(t, a, b):
+    return a + (b - a) * t
+
+
+joint_functions = {}
+n = 0
+for key in start_position_joints.keys():
+    qi = start_position_joints[key]
+    qm = intermediary_position_joints[key]
+    qf = end_position_joints[key]
+    fn = sp.Piecewise(
+        (linear_function(t, qi, qm), t < 1), (linear_function((t - 1), qm, qf), t >= 1)
+    )
+    joint_functions[key] = fn
+
+    n += 1
+    # print(f"{key} = {joint_functions[key]}")
+    print(
+        f"θ_{{{n}}} = If(t<1,{linear_function(t, qi, qm)},{linear_function((t- 1), qm, qf)})"
+    )
+# %% test
+joint_functions[sp.symbols("theta1")].subs(t, 0.49)
+joint_functions[sp.symbols("theta1")].subs(t, 0.5)
+
+#  %% Plotting the joint functions of t (time)
+
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+
+# Define the time range for plotting
+time_range = np.linspace(0, 2, 100)
+
+# Plotting the joint functions
+plt.figure(figsize=(10, 6))
+
+
+# Formatter function to convert y-axis values to fractions of π
+def pi_fraction_formatter(x, pos):
+    frac = sp.Rational(x / np.pi).limit_denominator()
+    if frac == 0:
+        return "0"
+    elif frac == 1:
+        return "$\pi$"
+    elif frac == -1:
+        return "$-\pi$"
+    elif frac.numerator == 1:
+        return f"$\\frac{{\pi}}{{{frac.denominator}}}$"
+    elif frac.numerator == -1:
+        return f"$-\\frac{{\pi}}{{{frac.denominator}}}$"
+    else:
+        return f"$\\frac{{{frac.numerator}\pi}}{{{frac.denominator}}}$"
+
+
+# Predefine specific y-tick values
+yticks = np.array(
+    [
+        -np.pi / 2,
+        -np.pi / 3,
+        -np.pi / 4,
+        -np.pi / 5,
+        -np.pi / 7,
+        -np.pi / 10,
+        0,
+        np.pi / 10,
+        np.pi / 7,
+        np.pi / 5,
+        np.pi / 4,
+        np.pi / 3,
+        np.pi / 2,
+    ]
+)
+
+# Plotting the joint functions
+plt.figure(figsize=(10, 7), dpi=500)
+
+for key, fn in joint_functions.items():
+    # Create a numpy function from the sympy expression
+    fn_np = sp.lambdify(t, fn, "numpy")
+    # Evaluate the function over the time range
+    fn_values = fn_np(time_range)
+    # Plot the function
+    plt.plot(time_range, fn_values, label=key)
+
+# Add labels and legend
+plt.xlabel("Tempo Normalizado (t)", fontsize=14)
+plt.ylabel("Ângulos de Junta (rad)", fontsize=14 )
+plt.title("Funções de Junta Lineares", fontsize=16 )
+plt.legend()
+plt.grid(True)
+
+# Set the y-axis ticks and labels
+plt.gca().set_yticks(yticks)
+plt.gca().yaxis.set_major_formatter(FuncFormatter(pi_fraction_formatter))
+
+# Increase the size of the x and y ticks
+plt.tick_params(axis='both', which='major', labelsize=12)
+
+# Show the plot
+plt.show()
+# %% Optimal (3th degree whatever) joint functions of t (time)
 # find a quadratic function for each joint
 # t = 0 -> start_position_joints
 # t = 0.5 -> intermediary_position_joints
 # t = 1 -> end_position_joints
 for key in start_position_joints.keys():
-    a = start_position_joints[key]
-    b = intermediary_position_joints[key]
-    c = end_position_joints[key]
-    print(
-        f"{key} = {2*a-2*b+2*c}t^2 + {2*b-3*a-c}t + {a}"
-    )
-# %%
+    qi = start_position_joints[key]
+    qf = end_position_joints[key]
+    wi0 = 0
+
+    [a0, a1, a2, a3] = sp.symbols(f"a0_{key} a1_{key} a2_{key} a3_{key}")
+    sp.nsolve([a0 + a1 + a2 + a3 - qf, 3 * a3 + 2 * a2 + a1 - wi0], (a0, a1, a2, a3))
+    a0 = qi
+    a1 = wi0  # a1 = qi.diff('t')
+    # NOTE: more equations
+    # a3t^3 + a2t^2 + a1t + a0 = qf
+    # 3a3t^2 + 2a2t + a1 = wf
+    # TODO: insert function here when the teacher write it
