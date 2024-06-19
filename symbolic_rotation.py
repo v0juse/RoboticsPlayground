@@ -677,28 +677,30 @@ plt.show()
 
 import sympy as sp
 
+
 def third_degree_interpolation(t, qi, qf, w0, wf):
     # Define symbols
     a0 = qi
     a1 = w0
     a2 = sp.symbols("a2")
     a3 = sp.symbols("a3")
-    
+
     # Solve for a2 and a3
     solved_values = sp.nsolve(
         (
-            a3 * 1 ** 3 + a2 * 1 ** 2 + a1 * 1 + a0 - qf,
-            3 * a3 * 1 ** 2 + 2 * a2 * 1 + a1 - wf,
+            a3 * 1**3 + a2 * 1**2 + a1 * 1 + a0 - qf,
+            3 * a3 * 1**2 + 2 * a2 * 1 + a1 - wf,
         ),
         (a2, a3),
         (1, 1),  # Initial guess for a2 and a3
     )
-    
+
     # Extract solved values for a2 and a3
     a2_solved, a3_solved = solved_values
-    
+
     # Use solved values in the return statement
-    return a0 + a1 * t + a2_solved * t ** 2 + a3_solved * t ** 3
+    return a0 + a1 * t + a2_solved * t**2 + a3_solved * t**3
+
 
 t = sp.symbols("t")
 optimal_joint_functions = {}
@@ -707,27 +709,22 @@ optimal_joint_functions = {}
 # t = 0 -> start_position_joints
 # t = 1 -> intermediary_position_joints
 # t = 2 -> end_position_joints
-n=1
+n = 1
 for key in start_position_joints.keys():
     qi = start_position_joints[key]
     qm = intermediary_position_joints[key]
     qf = end_position_joints[key]
     wi = 0
-    wm = 0.1
+    wm = 0.5
     wf = 0
 
     first_half_fn = third_degree_interpolation(t, qi, qm, wi, wm)
-    second_half_fn = third_degree_interpolation(t-1, qm, qf, wm, wf)
-    
-    fn = sp.Piecewise(
-        (first_half_fn, t < 1), (second_half_fn, t >= 1)
-    )
+    second_half_fn = third_degree_interpolation(t - 1, qm, qf, wm, wf)
 
+    fn = sp.Piecewise((first_half_fn, t < 1), (second_half_fn, t >= 1))
 
-    print(
-        f"θ_{{{n}}} = If(t<1,{first_half_fn},{second_half_fn})"
-    )
-    n+=1
+    print(f"θ_{{{n}}} = If(t<1,{first_half_fn},{second_half_fn})")
+    n += 1
     optimal_joint_functions[key] = sp.simplify(fn)
 optimal_joint_functions
 # %% plot optimal joint functions
