@@ -117,6 +117,11 @@ class FromDenavidHatenberg:
         self.base2zero = Matrix
         self.T_all = Matrix * self.T_all
 
+    def set_joint_functions(self, joint_functions: list[sp.Function]):
+        self.joint_functions = joint_functions
+        # NOTE is it the best way to do this implicitly?
+        self.J = self.get_jacobian_matrix()
+
     def get_homogenous_matrix(self):
         A = []
         for i, dh_parameters in enumerate(self.dh_parameters):
@@ -132,6 +137,39 @@ class FromDenavidHatenberg:
                 continue
             T_all = T_all * a
         return A, sp.simplify(T_all)
+
+    def get_jacobian_matrix(self):
+        assert hasattr(self, "joint_functions"), "Joint functions not set"
+        q = self.joint_functions.values()
+        J = sp.zeros(6, len(q))
+
+        T = sp.eye(4)
+        z = sp.Matrix([0, 0, 1])
+        p = sp.Matrix([0, 0, 0])
+
+        for i in range(len(q)):
+            T = T * self.A[i]
+            z_i = T[0:3, 2]
+            p_i = T[0:3, 3]
+
+            J_v = z.cross(p_i - p)
+            J_w = z
+
+            J[:, i] = J_v.col_join(J_w)
+            z = z_i
+            p = p_i
+
+        return sp.simplify(J)
+
+    def calculate_joint_velocities(self):
+        q_dot = [fn.diff("t") for fn in self.joint_functions.values()]
+        joint_velocities = self.J * sp.Matrix(q_dot)
+        linear_velocities = joint_velocities[:3, :]
+        angular_velocities = joint_velocities[3:, :]
+        return linear_velocities, angular_velocities
+
+    def calculate_end_effector_velocities(self, q_dot):
+        return self.J * sp.Matrix(q_dot)
 
 
 # %% Spherical manipulator
@@ -664,7 +702,9 @@ plt.tick_params(axis="both", which="major", labelsize=12)
 # Show the plot
 plt.show()
 
-
+# %% Discontinues joint velocity
+Robot.set_joint_functions(joint_functions)
+discontinuous_joint_velocity = Robot.calculate_joint_velocities(t)
 # %% Optimal (3th degree whatever) joint functions of t (time)
 # Conditions:
 # 1. t=0, y=a
