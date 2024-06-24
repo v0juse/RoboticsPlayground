@@ -161,8 +161,8 @@ class FromDenavidHatenberg:
 
         return sp.simplify(J)
 
-    def calculate_joint_velocities(self):
-        q_dot = [fn.diff("t") for fn in self.joint_functions.values()]
+    def calculate_joint_velocities(self, t: sp.Symbol | float):
+        q_dot = [fn.diff(t) for fn in self.joint_functions.values()]
         joint_velocities = self.J * sp.Matrix(q_dot)
         linear_velocities = joint_velocities[:3, :]
         angular_velocities = joint_velocities[3:, :]
@@ -200,28 +200,6 @@ R_homogeneus = homogenous_matrix(Rot=R)
 
 spherical_wrist.T_all
 
-
-# FIXME system solving not working
-def solve_inverse_kinematics(
-    manipulator_matrix: sp.Matrix, desired_matrix: sp.Matrix, n_equations=3
-):
-    zero_matrix = manipulator_matrix - desired_matrix
-    print(zero_matrix)
-    return sp.nsolve(
-        (
-            zero_matrix[2, 0],
-            zero_matrix[2, 1],
-            zero_matrix[2, 2],
-            zero_matrix[3, 0],
-            zero_matrix[3, 1],
-            zero_matrix[3, 2],
-        ),
-        (sp.symbols("theta1"), sp.symbols("theta2"), sp.symbols("theta3")),
-        (0, 0, 0),
-    )
-
-
-# solve_inverse_kinematics(spherical_wrist.T_all, R_homogeneus)
 # %% Spherical wrist
 
 ex_quadro_dh_params: list[DenavitHartenbergParams] = [
@@ -705,6 +683,7 @@ plt.show()
 # %% Discontinues joint velocity
 Robot.set_joint_functions(joint_functions)
 discontinuous_joint_velocity = Robot.calculate_joint_velocities(t)
+discontinuous_joint_velocity
 # %% Optimal (3th degree whatever) joint functions of t (time)
 # Conditions:
 # 1. t=0, y=a
