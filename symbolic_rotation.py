@@ -139,7 +139,8 @@ class FromDenavidHatenberg:
         return A, sp.simplify(T_all)
 
     def get_jacobian_matrix(self):
-        assert hasattr(self, "joint_functions"), "Joint functions not set"
+        assert hasattr(self, "joint_functions"), "Joint functions must be set"
+
         q = self.joint_functions.values()
         J = sp.zeros(6, len(q))
 
@@ -168,8 +169,14 @@ class FromDenavidHatenberg:
         angular_velocities = joint_velocities[3:, :]
         return linear_velocities, angular_velocities
 
-    def calculate_end_effector_velocities(self, q_dot):
+    def calculate_end_effector_velocities(self):
+        q_dot = [fn.diff(t) for fn in self.joint_functions.values()]
         return self.J * sp.Matrix(q_dot)
+
+    def calculate_inverse_velocity_kinematics(self, end_effector_velocities):
+        J_inv = self.J.pinv()
+        q_dot = J_inv * sp.Matrix(end_effector_velocities)
+        return q_dot
 
 
 # %% Spherical manipulator
@@ -507,30 +514,6 @@ for key in start_position_joints.keys():
     print(f"{key} = {joint_functions[key]}")
 
 
-# # %% Plot as subplots
-# # Create subplots
-# num_joints = len(joint_functions)
-# fig, axes = plt.subplots(num_joints, 1, figsize=(10, 6 * num_joints))
-
-# for i, (key, fn) in enumerate(joint_functions.items()):
-#     # Create a numpy function from the sympy expression
-#     fn_np = sp.lambdify(t, fn, "numpy")
-#     # Evaluate the function over the time range
-#     fn_values = fn_np(time_range)
-#     # Plot the function in the appropriate subplot
-#     axes[i].plot(time_range, fn_values, label=key)
-#     axes[i].set_xlabel("Time (t)")
-#     axes[i].set_ylabel("Position")
-#     axes[i].set_title(f"Joint Function: {key}")
-#     axes[i].legend()
-#     axes[i].grid(True)
-
-# # Adjust layout
-# plt.tight_layout()
-
-# # Show the plot
-# plt.show()
-
 # %% Add intermediary position
 p_end_effector_intermediary = sp.Matrix([1.5, 0.2, 0.9])
 n_end_effector_intermediary = sp.Matrix([sp.sqrt(2) / 2, sp.sqrt(2) / 2, 0])
@@ -682,8 +665,24 @@ plt.show()
 
 # %% Discontinues joint velocity
 Robot.set_joint_functions(joint_functions)
-discontinuous_joint_velocity = Robot.calculate_joint_velocities(t)
-discontinuous_joint_velocity
+discontinuous_linear_velocity, discontinuous_angular_speed = (
+    Robot.calculate_joint_velocities(t)
+)
+discontinuous_linear_velocity, discontinuous_angular_speed
+Robot.calculate_end_effector_velocities()
+# %% Plot velocities
+
+
+# time_range = np.linspace(0, 2, 100)
+
+# for key, fn in discontinuous_linear_velocity.items():
+#    # Create a numpy function from the sympy expression
+#     fn_np = sp.lambdify(t, fn, "numpy")
+#     # Evaluate the function over the time range
+#     fn_values = fn_np(time_range)
+#     # Plot the function
+#     plt.plot(time_range, fn_values, label=key)
+
 # %% Optimal (3th degree whatever) joint functions of t (time)
 # Conditions:
 # 1. t=0, y=a
@@ -782,4 +781,47 @@ plt.tick_params(axis="both", which="major", labelsize=12)
 
 # Show the plot
 plt.show()
-# %%
+
+# %% Optimal joint velocity
+Robot.set_joint_functions(optimal_joint_functions)
+optimal_linear_velocity, optimal_angular_speed = Robot.calculate_joint_velocities(t)
+optimal_linear_velocity, optimal_angular_speed
+end_effector_velocities = Robot.calculate_end_effector_velocities()
+end_effector_velocities
+# %%plot velocities
+linear_velocities = end_effector_velocities[:3, :]
+angular_velocities = end_effector_velocities[3:, :]
+
+# linear_velocities = np.array(
+#     [np.array(v).astype(np.float64).flatten() for v in linear_velocities]
+# )
+# angular_velocities = np.array(
+#     [np.array(v).astype(np.float64).flatten() for v in angular_velocities]
+# )
+
+fig, axs = plt.subplots(2, 1, figsize=(10, 8))
+
+time_points = np.linspace(0, 2, 100)
+
+# Plot linear velocities
+axs[0].plot(time_points, linear_velocities[:, 0], label="vx")
+axs[0].plot(time_points, linear_velocities[:, 1], label="vy")
+axs[0].plot(time_points, linear_velocities[:, 2], label="vz")
+axs[0].set_title("Linear Velocities")
+axs[0].set_xlabel("Time [s]")
+axs[0].set_ylabel("Velocity [units/s]")
+axs[0].legend()
+axs[0].grid()
+
+# Plot angular velocities
+axs[1].plot(time_points, angular_velocities[:, 0], label="wx")
+axs[1].plot(time_points, angular_velocities[:, 1], label="wy")
+axs[1].plot(time_points, angular_velocities[:, 2], label="wz")
+axs[1].set_title("Angular Velocities")
+axs[1].set_xlabel("Time [s]")
+axs[1].set_ylabel("Velocity [rad/s]")
+axs[1].legend()
+axs[1].grid()
+
+plt.tight_layout()
+plt.show()
