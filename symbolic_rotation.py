@@ -141,7 +141,7 @@ class FromDenavidHatenberg:
     def get_jacobian_matrix(self):
         assert hasattr(self, "joint_functions"), "Joint functions must be set"
 
-        q = self.joint_functions.values()
+        q = self.joint_functions.keys()
         J = sp.zeros(6, len(q))
 
         T = sp.eye(4)
@@ -788,40 +788,70 @@ optimal_linear_velocity, optimal_angular_speed = Robot.calculate_joint_velocitie
 optimal_linear_velocity, optimal_angular_speed
 end_effector_velocities = Robot.calculate_end_effector_velocities()
 end_effector_velocities
-# %%plot velocities
-linear_velocities = end_effector_velocities[:3, :]
-angular_velocities = end_effector_velocities[3:, :]
+# # %%plot velocities
+# linear_velocities = end_effector_velocities[:3, :]
+# angular_velocities = end_effector_velocities[3:, :]
 
-# linear_velocities = np.array(
-#     [np.array(v).astype(np.float64).flatten() for v in linear_velocities]
-# )
-# angular_velocities = np.array(
-#     [np.array(v).astype(np.float64).flatten() for v in angular_velocities]
-# )
+# # linear_velocities = np.array(
+# #     [np.array(v).astype(np.float64).flatten() for v in linear_velocities]
+# # )
+# # angular_velocities = np.array(
+# #     [np.array(v).astype(np.float64).flatten() for v in angular_velocities]
+# # )
 
-fig, axs = plt.subplots(2, 1, figsize=(10, 8))
+# fig, axs = plt.subplots(2, 1, figsize=(10, 8))
 
-time_points = np.linspace(0, 2, 100)
+# time_points = np.linspace(0, 2, 100)
 
-# Plot linear velocities
-axs[0].plot(time_points, linear_velocities[:, 0], label="vx")
-axs[0].plot(time_points, linear_velocities[:, 1], label="vy")
-axs[0].plot(time_points, linear_velocities[:, 2], label="vz")
-axs[0].set_title("Linear Velocities")
-axs[0].set_xlabel("Time [s]")
-axs[0].set_ylabel("Velocity [units/s]")
-axs[0].legend()
-axs[0].grid()
+# # Plot linear velocities
+# axs[0].plot(time_points, linear_velocities[:, 0], label="vx")
+# axs[0].plot(time_points, linear_velocities[:, 1], label="vy")
+# axs[0].plot(time_points, linear_velocities[:, 2], label="vz")
+# axs[0].set_title("Linear Velocities")
+# axs[0].set_xlabel("Time [s]")
+# axs[0].set_ylabel("Velocity [units/s]")
+# axs[0].legend()
+# axs[0].grid()
 
-# Plot angular velocities
-axs[1].plot(time_points, angular_velocities[:, 0], label="wx")
-axs[1].plot(time_points, angular_velocities[:, 1], label="wy")
-axs[1].plot(time_points, angular_velocities[:, 2], label="wz")
-axs[1].set_title("Angular Velocities")
-axs[1].set_xlabel("Time [s]")
-axs[1].set_ylabel("Velocity [rad/s]")
-axs[1].legend()
-axs[1].grid()
+# # Plot angular velocities
+# axs[1].plot(time_points, angular_velocities[:, 0], label="wx")
+# axs[1].plot(time_points, angular_velocities[:, 1], label="wy")
+# axs[1].plot(time_points, angular_velocities[:, 2], label="wz")
+# axs[1].set_title("Angular Velocities")
+# axs[1].set_xlabel("Time [s]")
+# axs[1].set_ylabel("Velocity [rad/s]")
+# axs[1].legend()
+# axs[1].grid()
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
+
+# %% Inverse Reverse Kinematics
+# Calculate the Jacobian matrix
+joint_symbols = list(start_position_joints.keys())
+Robot.set_joint_functions({symbol: sp.Function(str(symbol))(sp.Symbol("t")) for symbol in joint_symbols})
+Jacobian_matrix = Robot.J
+Jacobian_matrix
+
+# %% Define desired end-effector velocities
+desired_linear_velocity = sp.Matrix([0.1, 0.2, 0.3])  # Example linear velocities
+desired_angular_velocity = sp.Matrix([0.01, 0.02, 0.03])  # Example angular velocities
+desired_velocity = desired_linear_velocity.col_join(desired_angular_velocity)
+
+# %% Calculate the inverse Jacobian and joint velocities
+Jacobian_inverse = Jacobian_matrix.evalf(subs=start_position_joints).pinv()
+joint_velocities = Jacobian_inverse * desired_velocity
+joint_velocities 
+# %% Evaluate the joint velocities for a given robot configuration
+joint_values = {
+    sp.symbols("theta1"): sp.pi / 4,
+    sp.symbols("theta2"): -sp.pi / 4,
+    sp.symbols("theta3"): sp.pi / 6,
+    sp.symbols("theta4"): -sp.pi / 6,
+    sp.symbols("theta5"): sp.pi / 3,
+    sp.symbols("theta6"): -sp.pi / 3,
+}
+
+joint_velocities_evaluated = joint_velocities.evalf(subs=joint_values)
+joint_velocities_evaluated
+# %%
